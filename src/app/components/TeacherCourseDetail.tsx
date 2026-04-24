@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, QrCode, Bluetooth, Hash, UserPlus, Download, Users, CheckCircle, UserCheck } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
+import { ArrowLeft, Bluetooth, Hash, UserPlus, Download, Users, CheckCircle, UserCheck } from 'lucide-react';
 import { Course, AttendanceRequest, Student } from '../types';
 
 interface TeacherCourseDetailProps {
@@ -20,45 +19,58 @@ export function TeacherCourseDetail({
   onToggleStudentPresence,
   onManualAttendance
 }: TeacherCourseDetailProps) {
-  const [selectedMethod, setSelectedMethod] = useState<'qr' | 'bluetooth' | 'code' | 'manual'>('qr');
-  const [manualAttendance, setManualAttendance] = useState<{ [studentId: string]: boolean }>({});
-  const [qrCode, setQrCode] = useState('');
+  const [selectedMethod, setSelectedMethod] = useState<'bluetooth' | 'code' | 'manual'>('bluetooth');
+  const [studentAttendance, setStudentAttendance] = useState<{ [studentId: string]: boolean }>({});
   const [attendanceCode, setAttendanceCode] = useState('');
   const [showEnrollLink, setShowEnrollLink] = useState(false);
-
-  const generateRandomCode = () => {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
-  };
+  const [scanMessage, setScanMessage] = useState('Bluetooth scan results are shown below.');
 
   useEffect(() => {
-    setQrCode(generateRandomCode());
-    setAttendanceCode(generateRandomCode());
+    setAttendanceCode(Math.random().toString(36).substring(2, 8).toUpperCase());
 
     const interval = setInterval(() => {
-      setQrCode(generateRandomCode());
-      setAttendanceCode(generateRandomCode());
+      setAttendanceCode(Math.random().toString(36).substring(2, 8).toUpperCase());
     }, 20000);
 
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    if (selectedMethod === 'manual' && course.enrolledStudents) {
+    if ((selectedMethod === 'manual' || selectedMethod === 'bluetooth') && course.enrolledStudents) {
       const initialAttendance: { [studentId: string]: boolean } = {};
       course.enrolledStudents.forEach((student) => {
-        initialAttendance[student.id] = false;
+        initialAttendance[student.id] =
+          studentAttendance[student.id] !== undefined ? studentAttendance[student.id] : false;
       });
-      setManualAttendance(initialAttendance);
+      setStudentAttendance(initialAttendance);
     }
   }, [selectedMethod, course.enrolledStudents]);
 
-  const handleManualAttendanceSubmit = () => {
-    const selectedStudents = Object.entries(manualAttendance).map(([studentId, present]) => ({
+  const simulateBluetoothScan = () => {
+    if (!course.enrolledStudents) return;
+
+    const detectedAttendance = course.enrolledStudents.reduce<{ [studentId: string]: boolean }>(
+      (acc, student) => {
+        acc[student.id] = student.id.endsWith('1') || student.id.endsWith('3') || student.id.endsWith('5');
+        return acc;
+      },
+      {}
+    );
+
+    setStudentAttendance((prev) => ({
+      ...prev,
+      ...detectedAttendance,
+    }));
+    setScanMessage('Bluetooth scan updated. Students with Bluetooth turned on are marked present automatically.');
+  };
+
+  const handleAttendanceSubmit = () => {
+    const selectedStudents = Object.entries(studentAttendance).map(([studentId, present]) => ({
       studentId,
       present,
     }));
     onManualAttendance(selectedStudents);
-    setManualAttendance({});
+    setStudentAttendance({});
   };
 
   const enrollLink = `https://attendance.app/enroll/${course.id}`;
@@ -109,19 +121,7 @@ export function TeacherCourseDetail({
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <button
-            onClick={() => setSelectedMethod('qr')}
-            className={`p-6 rounded-xl border-2 transition-all ${
-              selectedMethod === 'qr'
-                ? 'border-blue-500 bg-blue-50'
-                : 'border-gray-200 bg-white hover:border-blue-300'
-            }`}
-          >
-            <QrCode className="w-8 h-8 text-blue-600 mb-2" />
-            <span className="font-medium text-gray-900">QR Code</span>
-          </button>
-
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <button
             onClick={() => setSelectedMethod('bluetooth')}
             className={`p-6 rounded-xl border-2 transition-all ${
@@ -160,24 +160,82 @@ export function TeacherCourseDetail({
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-8">
-          {selectedMethod === 'qr' && (
-            <div className="text-center">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">QR Code for Attendance</h3>
-              <div className="inline-block p-4 bg-white rounded-lg border-2 border-gray-200">
-                <QRCodeSVG value={qrCode} size={200} />
-              </div>
-              <p className="text-sm text-gray-600 mt-4">Code refreshes every 20 seconds</p>
-            </div>
-          )}
-
           {selectedMethod === 'bluetooth' && (
-            <div className="text-center">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Bluetooth Connection</h3>
-              <div className="inline-block p-8 bg-indigo-50 rounded-lg">
-                <Bluetooth className="w-16 h-16 text-indigo-600 mx-auto mb-4 animate-pulse" />
-                <p className="text-lg font-mono font-semibold text-indigo-900">{course.code}-BT</p>
+            <div>
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Bluetooth Attendance</h3>
+                  <p className="text-sm text-gray-600">
+                    Students with Bluetooth turned on are marked present automatically. You can override any student's status manually.
+                  </p>
+                </div>
+                <button
+                  onClick={simulateBluetoothScan}
+                  className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
+                >
+                  Refresh Scan
+                </button>
               </div>
-              <p className="text-sm text-gray-600 mt-4">Students can connect via Bluetooth</p>
+
+              <p className="text-sm text-gray-500 mb-6">{scanMessage}</p>
+
+              {course.enrolledStudents && course.enrolledStudents.length > 0 ? (
+                <div className="space-y-3 mb-6">
+                  {course.enrolledStudents.map((student) => (
+                    <div key={student.id} className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between p-4 bg-gray-50 rounded-lg">
+                      <div>
+                        <p className="font-medium text-gray-900">{student.name}</p>
+                        <p className="text-sm text-gray-600">{student.email}</p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                          studentAttendance[student.id]
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-red-100 text-red-700'
+                        }`}>
+                          {studentAttendance[student.id] ? 'Present' : 'Absent'}
+                        </span>
+                        <button
+                          onClick={() =>
+                            setStudentAttendance({ ...studentAttendance, [student.id]: true })
+                          }
+                          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                            studentAttendance[student.id]
+                              ? 'bg-green-600 text-white'
+                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                          }`}
+                        >
+                          Present
+                        </button>
+                        <button
+                          onClick={() =>
+                            setStudentAttendance({ ...studentAttendance, [student.id]: false })
+                          }
+                          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                            studentAttendance[student.id] === false
+                              ? 'bg-red-600 text-white'
+                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                          }`}
+                        >
+                          Absent
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 text-center py-8">No students enrolled yet</p>
+              )}
+
+              {course.enrolledStudents && course.enrolledStudents.length > 0 && (
+                <button
+                  onClick={handleAttendanceSubmit}
+                  className="w-full bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center space-x-2 font-medium"
+                >
+                  <CheckCircle className="w-5 h-5" />
+                  <span>Submit Bluetooth Attendance</span>
+                </button>
+              )}
             </div>
           )}
 
@@ -205,10 +263,10 @@ export function TeacherCourseDetail({
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() =>
-                            setManualAttendance({ ...manualAttendance, [student.id]: true })
+                            setStudentAttendance({ ...studentAttendance, [student.id]: true })
                           }
                           className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                            manualAttendance[student.id] === true
+                            studentAttendance[student.id] === true
                               ? 'bg-green-600 text-white'
                               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                           }`}
@@ -217,10 +275,10 @@ export function TeacherCourseDetail({
                         </button>
                         <button
                           onClick={() =>
-                            setManualAttendance({ ...manualAttendance, [student.id]: false })
+                            setStudentAttendance({ ...studentAttendance, [student.id]: false })
                           }
                           className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                            manualAttendance[student.id] === false
+                            studentAttendance[student.id] === false
                               ? 'bg-red-600 text-white'
                               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                           }`}
@@ -237,7 +295,7 @@ export function TeacherCourseDetail({
 
               {course.enrolledStudents && course.enrolledStudents.length > 0 && (
                 <button
-                  onClick={handleManualAttendanceSubmit}
+                  onClick={handleAttendanceSubmit}
                   className="w-full bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center space-x-2 font-medium"
                 >
                   <CheckCircle className="w-5 h-5" />

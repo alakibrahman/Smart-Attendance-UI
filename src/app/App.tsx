@@ -75,7 +75,7 @@ export default function App() {
   };
 
   const handleStudentSubmitAttendance = (courseId: string, method: string, value: string) => {
-    setAttendanceStatus('pending');
+    setAttendanceStatus('approved');
     setAttendanceRequests([
       ...attendanceRequests,
       {
@@ -89,7 +89,23 @@ export default function App() {
   };
 
   const handleTeacherApproveAttendance = () => {
-    setAttendanceStatus('approved');
+    if (selectedCourseId) {
+      const currentDate = new Date().toISOString().split('T')[0];
+      setCourses(
+        courses.map((course) =>
+          course.id === selectedCourseId
+            ? {
+                ...course,
+                attendanceRecords: [
+                  ...(course.attendanceRecords || []),
+                  { date: currentDate, present: true },
+                ],
+              }
+            : course
+        )
+      );
+    }
+
     setAttendanceRequests([]);
 
     setTimeout(() => {
