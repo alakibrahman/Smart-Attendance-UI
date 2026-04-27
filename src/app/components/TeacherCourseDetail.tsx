@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Bluetooth, Hash, UserPlus, Download, Users, CheckCircle, UserCheck } from 'lucide-react';
+import { ArrowLeft, Bluetooth, Hash, UserPlus, Download, Users, CheckCircle, UserCheck, Trash2 } from 'lucide-react';
 import { Course, AttendanceRequest, Student } from '../types';
 
 interface TeacherCourseDetailProps {
@@ -9,6 +9,7 @@ interface TeacherCourseDetailProps {
   onApproveAttendance: () => void;
   onToggleStudentPresence: (studentId: string) => void;
   onManualAttendance: (selectedStudents: { studentId: string; present: boolean }[]) => void;
+  onDeleteStudent: (courseId: string, studentId: string) => void;
 }
 
 export function TeacherCourseDetail({
@@ -17,13 +18,16 @@ export function TeacherCourseDetail({
   attendanceRequests,
   onApproveAttendance,
   onToggleStudentPresence,
-  onManualAttendance
+  onManualAttendance,
+  onDeleteStudent
 }: TeacherCourseDetailProps) {
   const [selectedMethod, setSelectedMethod] = useState<'bluetooth' | 'code' | 'manual'>('bluetooth');
   const [studentAttendance, setStudentAttendance] = useState<{ [studentId: string]: boolean }>({});
   const [attendanceCode, setAttendanceCode] = useState('');
   const [showEnrollLink, setShowEnrollLink] = useState(false);
+  const [showDeleteMenu, setShowDeleteMenu] = useState(false);
   const [scanMessage, setScanMessage] = useState('Bluetooth scan results are shown below.');
+  const [attendanceFilter, setAttendanceFilter] = useState<'all' | 'present' | 'absent'>('all');
 
   useEffect(() => {
     setAttendanceCode(Math.random().toString(36).substring(2, 8).toUpperCase());
@@ -71,6 +75,25 @@ export function TeacherCourseDetail({
     }));
     onManualAttendance(selectedStudents);
     setStudentAttendance({});
+  };
+
+  const getFilteredStudents = () => {
+    if (!course.enrolledStudents) return [];
+
+    if (attendanceFilter === 'all') return course.enrolledStudents;
+    if (attendanceFilter === 'present') {
+      return course.enrolledStudents.filter(student => studentAttendance[student.id] === true);
+    }
+    if (attendanceFilter === 'absent') {
+      return course.enrolledStudents.filter(student => studentAttendance[student.id] === false);
+    }
+    return course.enrolledStudents;
+  };
+
+  const handleDeleteStudent = (student: Student) => {
+    if (window.confirm(`Are you sure you want to remove ${student.name} from this course?`)) {
+      onDeleteStudent(course.id, student.id);
+    }
   };
 
   const enrollLink = `https://attendance.app/enroll/${course.id}`;
@@ -123,7 +146,10 @@ export function TeacherCourseDetail({
       <main className="max-w-6xl mx-auto px-4 py-8">
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <button
-            onClick={() => setSelectedMethod('bluetooth')}
+            onClick={() => {
+              setSelectedMethod('bluetooth');
+              setAttendanceFilter('all');
+            }}
             className={`p-6 rounded-xl border-2 transition-all ${
               selectedMethod === 'bluetooth'
                 ? 'border-indigo-500 bg-indigo-50'
@@ -135,7 +161,10 @@ export function TeacherCourseDetail({
           </button>
 
           <button
-            onClick={() => setSelectedMethod('code')}
+            onClick={() => {
+              setSelectedMethod('code');
+              setAttendanceFilter('all');
+            }}
             className={`p-6 rounded-xl border-2 transition-all ${
               selectedMethod === 'code'
                 ? 'border-green-500 bg-green-50'
@@ -147,7 +176,10 @@ export function TeacherCourseDetail({
           </button>
 
           <button
-            onClick={() => setSelectedMethod('manual')}
+            onClick={() => {
+              setSelectedMethod('manual');
+              setAttendanceFilter('all');
+            }}
             className={`p-6 rounded-xl border-2 transition-all ${
               selectedMethod === 'manual'
                 ? 'border-purple-500 bg-purple-50'
@@ -179,9 +211,44 @@ export function TeacherCourseDetail({
 
               <p className="text-sm text-gray-500 mb-6">{scanMessage}</p>
 
+              {/* Attendance Filter Buttons */}
+              <div className="flex items-center space-x-2 mb-6">
+                <span className="text-sm font-medium text-gray-700">Filter:</span>
+                <button
+                  onClick={() => setAttendanceFilter('all')}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    attendanceFilter === 'all'
+                      ? 'bg-gray-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  All ({course.enrolledStudents?.length || 0})
+                </button>
+                <button
+                  onClick={() => setAttendanceFilter('present')}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    attendanceFilter === 'present'
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  Present ({course.enrolledStudents?.filter(s => studentAttendance[s.id] === true).length || 0})
+                </button>
+                <button
+                  onClick={() => setAttendanceFilter('absent')}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    attendanceFilter === 'absent'
+                      ? 'bg-red-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  Absent ({course.enrolledStudents?.filter(s => studentAttendance[s.id] === false).length || 0})
+                </button>
+              </div>
+
               {course.enrolledStudents && course.enrolledStudents.length > 0 ? (
                 <div className="space-y-3 mb-6">
-                  {course.enrolledStudents.map((student) => (
+                  {getFilteredStudents().map((student) => (
                     <div key={student.id} className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between p-4 bg-gray-50 rounded-lg">
                       <div>
                         <p className="font-medium text-gray-900">{student.name}</p>
@@ -240,21 +307,94 @@ export function TeacherCourseDetail({
           )}
 
           {selectedMethod === 'code' && (
-            <div className="text-center">
+            <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Attendance Code</h3>
-              <div className="inline-block p-8 bg-green-50 rounded-lg">
-                <p className="text-4xl font-mono font-bold text-green-900">{attendanceCode}</p>
+              <div className="text-center mb-6">
+                <div className="inline-block p-8 bg-green-50 rounded-lg">
+                  <p className="text-4xl font-mono font-bold text-green-900">{attendanceCode}</p>
+                </div>
+                <p className="text-sm text-gray-600 mt-4">Code refreshes every 20 seconds</p>
               </div>
-              <p className="text-sm text-gray-600 mt-4">Code refreshes every 20 seconds</p>
+
+              {/* Attendance Filter Buttons for Code Method */}
+              <div className="flex items-center space-x-2 mb-6">
+                <span className="text-sm font-medium text-gray-700">Filter Requests:</span>
+                <button
+                  onClick={() => setAttendanceFilter('all')}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    attendanceFilter === 'all'
+                      ? 'bg-gray-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  All ({attendanceRequests.length})
+                </button>
+                <button
+                  onClick={() => setAttendanceFilter('present')}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    attendanceFilter === 'present'
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  Present ({attendanceRequests.filter(r => r.present).length})
+                </button>
+                <button
+                  onClick={() => setAttendanceFilter('absent')}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    attendanceFilter === 'absent'
+                      ? 'bg-red-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  Absent ({attendanceRequests.filter(r => !r.present).length})
+                </button>
+              </div>
             </div>
           )}
 
           {selectedMethod === 'manual' && (
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-6">Manual Attendance</h3>
+
+              {/* Attendance Filter Buttons */}
+              <div className="flex items-center space-x-2 mb-6">
+                <span className="text-sm font-medium text-gray-700">Filter:</span>
+                <button
+                  onClick={() => setAttendanceFilter('all')}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    attendanceFilter === 'all'
+                      ? 'bg-gray-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  All ({course.enrolledStudents?.length || 0})
+                </button>
+                <button
+                  onClick={() => setAttendanceFilter('present')}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    attendanceFilter === 'present'
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  Present ({course.enrolledStudents?.filter(s => studentAttendance[s.id] === true).length || 0})
+                </button>
+                <button
+                  onClick={() => setAttendanceFilter('absent')}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    attendanceFilter === 'absent'
+                      ? 'bg-red-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  Absent ({course.enrolledStudents?.filter(s => studentAttendance[s.id] === false).length || 0})
+                </button>
+              </div>
+
               {course.enrolledStudents && course.enrolledStudents.length > 0 ? (
                 <div className="space-y-3 mb-6">
-                  {course.enrolledStudents.map((student) => (
+                  {getFilteredStudents().map((student) => (
                     <div key={student.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                       <div>
                         <p className="font-medium text-gray-900">{student.name}</p>
@@ -308,13 +448,24 @@ export function TeacherCourseDetail({
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Enrolled Students</h3>
+            <div className="flex items-center gap-3">
+              <h3 className="text-lg font-semibold text-gray-900">Enrolled Students</h3>
+              <button
+                onClick={() => setShowDeleteMenu(!showDeleteMenu)}
+                className={`flex items-center space-x-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  showDeleteMenu ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 hover:bg-red-200'
+                }`}
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete</span>
+              </button>
+            </div>
             <button
               onClick={() => setShowEnrollLink(!showEnrollLink)}
-              className="flex items-center space-x-2 text-blue-600 hover:text-blue-700 transition-colors"
+              aria-label="Generate Enroll Link"
+              className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
             >
-              <UserPlus className="w-4 h-4" />
-              <span className="text-sm font-medium">Generate Enroll Link</span>
+              <UserPlus className="w-5 h-5" />
             </button>
           </div>
 
@@ -334,6 +485,29 @@ export function TeacherCourseDetail({
                 >
                   Copy
                 </button>
+              </div>
+            </div>
+          )}
+
+          {showDeleteMenu && course.enrolledStudents && course.enrolledStudents.length > 0 && (
+            <div className="mb-4 p-4 bg-red-50 rounded-lg border border-red-200">
+              <p className="text-sm font-medium text-red-700 mb-3">Select a student to delete:</p>
+              <div className="space-y-2">
+                {course.enrolledStudents.map((student) => (
+                  <button
+                    key={student.id}
+                    onClick={() => handleDeleteStudent(student)}
+                    className="w-full text-left bg-white px-4 py-3 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-gray-900">{student.name}</p>
+                        <p className="text-sm text-gray-600">{student.email}</p>
+                      </div>
+                      <Trash2 className="w-4 h-4 text-red-600" />
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
           )}

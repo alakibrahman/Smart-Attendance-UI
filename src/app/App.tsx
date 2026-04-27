@@ -120,6 +120,19 @@ export default function App() {
     setSelectedCourseId(null);
   };
 
+  const handleDeleteStudent = (courseId: string, studentId: string) => {
+    setCourses(
+      courses.map((course) =>
+        course.id === courseId
+          ? {
+              ...course,
+              enrolledStudents: course.enrolledStudents?.filter((student) => student.id !== studentId) || [],
+            }
+          : course
+      )
+    );
+  };
+
   const handleToggleStudentPresence = (studentId: string) => {
     setAttendanceRequests(
       attendanceRequests.map((req) =>
@@ -128,16 +141,36 @@ export default function App() {
     );
   };
 
-  const handleAddCourse = (name: string, code: string) => {
-    const newCourse: Course = {
-      id: Date.now().toString(),
-      name,
-      code,
-      teacherId: user!.id,
-      enrolledStudents: [],
-      attendanceRecords: [],
-    };
-    setCourses([...courses, newCourse]);
+  const handleJoinCourse = (courseId: string, studentName: string, studentRoll: string) => {
+    const course = courses.find(c => c.id === courseId);
+    if (!course) {
+      alert('Course not found. Please check the join link.');
+      return;
+    }
+
+    if (course.enrolledStudents?.some(s => s.id === user!.id)) {
+      alert('You are already enrolled in this course.');
+      return;
+    }
+
+    setCourses(
+      courses.map((c) =>
+        c.id === courseId
+          ? {
+              ...c,
+              enrolledStudents: [
+                ...(c.enrolledStudents || []),
+                {
+                  id: user!.id,
+                  name: studentName,
+                  email: user!.email,
+                  roll: studentRoll,
+                },
+              ],
+            }
+          : c
+      )
+    );
   };
 
   const handleDeleteCourse = (courseId: string) => {
@@ -176,6 +209,7 @@ export default function App() {
           <StudentCourses
             courses={courses}
             onSelectCourse={setSelectedCourseId}
+            onJoinCourse={handleJoinCourse}
           />
         ) : null}
       </StudentDashboard>
@@ -198,6 +232,7 @@ export default function App() {
           onApproveAttendance={handleTeacherApproveAttendance}
           onToggleStudentPresence={handleToggleStudentPresence}
           onManualAttendance={handleManualAttendance}
+          onDeleteStudent={handleDeleteStudent}
         />
       );
     }
